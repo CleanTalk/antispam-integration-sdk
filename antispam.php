@@ -163,6 +163,12 @@ function antispam_gather_params($data)
         }
     });
 
+    if (function_exists('apache_request_headers')) {
+        $all_headers = array_filter(apache_request_headers(), function($value, $key) {
+            return strtolower($key) !== 'cookie';
+        }, ARRAY_FILTER_USE_BOTH);
+    }
+
     return [
         'sender_ip' => $_SERVER['REMOTE_ADDR'],
         'x_forwarded_for' => isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null,
@@ -171,5 +177,6 @@ function antispam_gather_params($data)
         'agent' => 'antispam-3rd-party-0.1.0',
         'sender_email' => $email,
         'event_token' => $data['ct_bot_detector_event_token'],
+        'all_headers' => !empty($all_headers) ? json_encode($all_headers) : '',
     ];
 }
