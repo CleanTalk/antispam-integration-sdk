@@ -3,10 +3,11 @@
 defined( 'ABSPATH' ) || exit;
 
 add_action('wp_ajax_antispam_key_form', 'antispam_sync');
+add_filter('wp_ajax_forminator_save_captcha_popup', 'antispam_sync');
 if (antispam_key() && !defined('APBCT_VERSION')) {
     add_action('wp_head', 'antispam_render_bot_detector');
 }
-
+//var_dump($_POST);
 function antispam_sync()
 {
     $key = sanitize_text_field($_POST['antispam_key']);
@@ -94,6 +95,34 @@ function antispam_render_key_form()
         });
     });
     </script>';
+}
+
+function antispam_render_button_captcha_settings($captcha_tab_saved)
+{
+    return '
+        <button type="button" role="tab" id="antispam-by-cleantalk-btn"
+        class="captcha-main-tab sui-tab-item' . esc_attr( "antispam-by-cleantalk" === $captcha_tab_saved ? 'active' : '' ) .'"
+        aria-controls="antispam-by-cleantalk-tab"
+        aria-selected="false"
+        data-tab-name="antispam-by-cleantalk">Antispam by CleanTalk</button>';
+}
+
+function antispam_render_key_settings($captcha_tab_saved)
+{
+    $key = antispam_key();
+    $agitation = '<span>Antispam is inactive, please enter your key to avoid spam from your life. <a href="https://cleantalk.org/" target="_blank">Get your key</a></span>';
+    $message = $key ? 'Antispam is active.' : $agitation;
+    return '
+        <div 
+        tabindex="1" 
+        role="tabpanel" 
+        id="antispam-by-cleantalk-tab" 
+        class="sui-tab-content' . esc_attr( 'antispam-by-cleantalk' === $captcha_tab_saved ? 'active' : '' ) . '" 
+        aria-labelledby="antispam-by-cleantalk-btn">'
+            . $message . '<br><input type="text" name="antispam_key" value="' . $key . '">'
+            . wp_nonce_field('antispam_key_form', 'antispam_key_form_nonce') . '
+        </div>
+    ';
 }
 
 function antispam_key()
