@@ -7,7 +7,7 @@ add_filter('wp_ajax_forminator_save_captcha_popup', 'antispam_sync');
 if (antispam_key() && !defined('APBCT_VERSION')) {
     add_action('wp_head', 'antispam_render_bot_detector');
 }
-//var_dump($_POST);
+
 function antispam_sync()
 {
     $key = sanitize_text_field($_POST['antispam_key']);
