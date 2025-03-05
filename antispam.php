@@ -3,6 +3,7 @@
 defined( 'ABSPATH' ) || exit;
 
 add_action('wp_ajax_antispam_key_form', 'antispam_sync');
+
 if (antispam_key() && !defined('APBCT_VERSION')) {
     add_action('wp_head', 'antispam_render_bot_detector');
 }
@@ -96,6 +97,34 @@ function antispam_render_key_form()
     </script>';
 }
 
+function antispam_render_button_captcha_settings($captcha_tab_saved)
+{
+    return '
+        <button type="button" role="tab" id="antispam-by-cleantalk-btn"
+        class="captcha-main-tab sui-tab-item' . esc_attr( "antispam-by-cleantalk" === $captcha_tab_saved ? 'active' : '' ) .'"
+        aria-controls="antispam-by-cleantalk-tab"
+        aria-selected="false"
+        data-tab-name="antispam-by-cleantalk">Antispam by CleanTalk</button>';
+}
+
+function antispam_render_key_settings($captcha_tab_saved)
+{
+    $key = antispam_key();
+    $agitation = '<span>Antispam is inactive, please enter your key to avoid spam from your life. <a href="https://cleantalk.org/" target="_blank">Get your key</a></span>';
+    $message = $key ? 'Antispam is active.' : $agitation;
+    return '
+        <div 
+        tabindex="1" 
+        role="tabpanel" 
+        id="antispam-by-cleantalk-tab" 
+        class="sui-tab-content' . esc_attr( 'antispam-by-cleantalk' === $captcha_tab_saved ? 'active' : '' ) . '" 
+        aria-labelledby="antispam-by-cleantalk-btn">'
+            . $message . '<br><input type="text" name="antispam_key" value="' . $key . '">'
+            . wp_nonce_field('antispam_key_form', 'antispam_key_form_nonce') . '
+        </div>
+    ';
+}
+
 function antispam_key()
 {
     $key = get_option('antispam_key', '');
@@ -144,7 +173,7 @@ function antispam_check_is_spam($data)
     }
 
     if (isset($response->allow) && $response->allow == 0) {
-        return true;
+        return $response->comment;
     }
 
     $cleantalk_executed = true;
@@ -156,7 +185,7 @@ function antispam_gather_params($data)
 {
     $email_pattern = '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/';
     $email = null;
-    
+
     array_walk_recursive($data, function($value) use (&$email, $email_pattern) {
         if (is_string($value) && preg_match($email_pattern, $value, $matches)) {
             $email = $matches[0];
@@ -178,5 +207,8 @@ function antispam_gather_params($data)
         'sender_email' => $email,
         'event_token' => $data['ct_bot_detector_event_token'],
         'all_headers' => !empty($all_headers) ? json_encode($all_headers) : '',
+        'sender_info' => [
+            'REFFERRER' => isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '',
+        ]
     ];
 }
