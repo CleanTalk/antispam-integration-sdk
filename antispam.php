@@ -3,7 +3,7 @@
 defined( 'ABSPATH' ) || exit;
 
 add_action('wp_ajax_antispam_key_form', 'antispam_sync');
-add_filter('wp_ajax_forminator_save_captcha_popup', 'antispam_sync');
+
 if (antispam_key() && !defined('APBCT_VERSION')) {
     add_action('wp_head', 'antispam_render_bot_detector');
 }
@@ -173,7 +173,7 @@ function antispam_check_is_spam($data)
     }
 
     if (isset($response->allow) && $response->allow == 0) {
-        return true;
+        return $response->comment;
     }
 
     $cleantalk_executed = true;
@@ -185,7 +185,7 @@ function antispam_gather_params($data)
 {
     $email_pattern = '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/';
     $email = null;
-    
+
     array_walk_recursive($data, function($value) use (&$email, $email_pattern) {
         if (is_string($value) && preg_match($email_pattern, $value, $matches)) {
             $email = $matches[0];
@@ -207,5 +207,8 @@ function antispam_gather_params($data)
         'sender_email' => $email,
         'event_token' => $data['ct_bot_detector_event_token'],
         'all_headers' => !empty($all_headers) ? json_encode($all_headers) : '',
+        'sender_info' => [
+            'REFFERRER' => isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '',
+        ]
     ];
 }

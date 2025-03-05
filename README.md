@@ -1,29 +1,34 @@
-# antispam-integration-sdk
+# Anti-Spam by CleanTalk integration SDK for WordPress plugins
 
-1) Attach a file with functions wp-content\plugins\forminator\forminator.php:40
+## How to use summary
+* Clone this SDK to your plugin
+* Include `antispam.php` to your plugin
+* Add the key setting form to your plugin settings
+* Add verification in the form processing method
 
-require_once plugin_dir_path( __FILE__ ) . 'antispam.php';
+## How to use
 
-2) To show somewhere an independent form for saving the key wp-content\plugins\forminator\admin\views\common\entries\content.php:26
+1) Clone this SDK and place directory `antispam-integration-sdk` into your plugin directory, for example like below
+```
+your_plugin/
+    antispam-integration-sdk/
+        antispam.php
+    your-plugin.php
+```
 
-<?php echo antispam_render_key_form(); ?>
+2) Attach `antispam-integration-sdk/antispam.php` in your main plugin file, for example like below
+```php
+require_once plugin_dir_path( __FILE__ ) . 'antispam-integration-sdk/antispam.php';
+```
 
-3) To embed the key setting into the captcha setting
+3) To show somewhere an independent form for saving the api-key, for example like below
+```php
+echo antispam_render_key_form();
+```
 
-    3.1) Need to install a settings toggle button
-    wp-content\plugins\forminator\admin\views\settings\tab-recaptcha.php:103
-
-    <?php echo antispam_render_button_captcha_settings($captcha_tab_saved) ?>
-
-    3.2) Need to place a settings field
-    wp-content\plugins\forminator\admin\views\settings\tab-recaptcha.php:357
-    <?php echo antispam_render_key_settings($captcha_tab_saved) ?>
-
-Saving works through the same save button as the captcha.
-
-3) Add verification in the form processing method 
-wp-content\plugins\forminator\library\abstracts\abstract-class-front-action.php:464
-
-if (antispam_check_is_spam($_POST)) {
-    wp_send_json_error( esc_html__( 'Spam detected', 'forminator' ) );
+4) Add Anti-Spam verification in the form processing method, for example like below
+```php
+if ($response = antispam_check_is_spam($_POST)) {
+    wp_send_json_error($response);
 }
+```
