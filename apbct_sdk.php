@@ -2,21 +2,24 @@
 
 defined( 'ABSPATH' ) || exit;
 
-add_action('wp_ajax_antispam_key_form', 'antispam_sync');
+define('APBCT_SDK_NAME', 'apbct_sdk');
+define('APBCT_SDK_VERSION', '0.1.0');
 
-if (antispam_key() && !defined('APBCT_VERSION')) {
-    add_action('wp_head', 'antispam_render_bot_detector');
+add_action('wp_ajax_apbct_sdk_key_form', 'apbct_sdk_sync');
+
+if (apbct_sdk_key() && !defined('APBCT_VERSION')) {
+    add_action('wp_head', 'apbct_sdk_render_bot_detector');
 }
 
-function antispam_sync()
+function apbct_sdk_sync()
 {
-    $key = sanitize_text_field($_POST['antispam_key']);
+    $key = sanitize_text_field($_POST['apbct_sdk_key']);
     $result = [
         'success' => false,
         'message' => '',
     ];
 
-    if (!wp_verify_nonce($_POST['antispam_key_form_nonce'], 'antispam_key_form')) {
+    if (!wp_verify_nonce($_POST['apbct_sdk_key_form_nonce'], 'apbct_sdk_key_form')) {
         $result['message'] = 'nonce is not valid';
         wp_send_json($result);
     }
@@ -65,31 +68,31 @@ function antispam_sync()
         wp_send_json($result);
     }
 
-    update_option('antispam_key', $key);
+    update_option('apbct_sdk_key', $key);
     $result['success'] = true;
     wp_send_json($result);
 }
 
-function antispam_render_key_form()
+function apbct_sdk_render_key_form()
 {
-    $key = antispam_key();
+    $key = apbct_sdk_key();
     $agitation = '<span>Antispam is inactive, please enter your key to avoid spam from your life. <a href="https://cleantalk.org/" target="_blank">Get your key</a></span>';
     $message = $key ? 'Antispam is active.' : $agitation;
 
-    return '<p><form id="antispam-key-form" method="post">'
-    . $message . '<br><input type="text" name="antispam_key" value="' . $key . '"> <input type="submit" value="Save">'
-    . wp_nonce_field('antispam_key_form', 'antispam_key_form_nonce') . '<input type="hidden" name="action" value="antispam_key_form">'
+    return '<p><form id="apbct_sdk-key-form" method="post">'
+    . $message . '<br><input type="text" name="apbct_sdk_key" value="' . $key . '"> <input type="submit" value="Save">'
+    . wp_nonce_field('apbct_sdk_key_form', 'apbct_sdk_key_form_nonce') . '<input type="hidden" name="action" value="apbct_sdk_key_form">'
     . '</form></p>'
     . '<script> jQuery(document).ready(function($) {
-        $("form#antispam-key-form").submit(function(e) {
+        $("form#apbct_sdk-key-form").submit(function(e) {
             e.preventDefault();
             $.post("' . admin_url('admin-ajax.php') . '", $(this).serialize(), function(response) {
-                $(".antispam-error").remove();
+                $(".apbct_sdk-error").remove();
 
                 if (response.success) {
-                    $("input[name=\'antispam_key\']").parent().find("span").html("Antispam is active.");
+                    $("input[name=\'apbct_sdk_key\']").parent().find("span").html("Antispam is active.");
                 } else {
-                    $("input[name=\'antispam_key\']").parent().after("<div class=\'error antispam-error\'>" + response.message + "</div>");
+                    $("input[name=\'apbct_sdk_key\']").parent().after("<div class=\'error apbct_sdk-error\'>" + response.message + "</div>");
                 }
             });
         });
@@ -97,58 +100,30 @@ function antispam_render_key_form()
     </script>';
 }
 
-function antispam_render_button_captcha_settings($captcha_tab_saved)
+function apbct_sdk_key()
 {
-    return '
-        <button type="button" role="tab" id="antispam-by-cleantalk-btn"
-        class="captcha-main-tab sui-tab-item' . esc_attr( "antispam-by-cleantalk" === $captcha_tab_saved ? 'active' : '' ) .'"
-        aria-controls="antispam-by-cleantalk-tab"
-        aria-selected="false"
-        data-tab-name="antispam-by-cleantalk">Antispam by CleanTalk</button>';
-}
-
-function antispam_render_key_settings($captcha_tab_saved)
-{
-    $key = antispam_key();
-    $agitation = '<span>Antispam is inactive, please enter your key to avoid spam from your life. <a href="https://cleantalk.org/" target="_blank">Get your key</a></span>';
-    $message = $key ? 'Antispam is active.' : $agitation;
-    return '
-        <div 
-        tabindex="1" 
-        role="tabpanel" 
-        id="antispam-by-cleantalk-tab" 
-        class="sui-tab-content' . esc_attr( 'antispam-by-cleantalk' === $captcha_tab_saved ? 'active' : '' ) . '" 
-        aria-labelledby="antispam-by-cleantalk-btn">'
-            . $message . '<br><input type="text" name="antispam_key" value="' . $key . '">'
-            . wp_nonce_field('antispam_key_form', 'antispam_key_form_nonce') . '
-        </div>
-    ';
-}
-
-function antispam_key()
-{
-    $key = get_option('antispam_key', '');
+    $key = get_option('apbct_sdk_key', '');
     if (is_string($key)) {
         return $key;
     }
     return '';
 }
 
-function antispam_render_bot_detector()
+function apbct_sdk_render_bot_detector()
 {
     echo '<script src="https://moderate.cleantalk.org/ct-bot-detector-wrapper.js" id="ct_bot_detector-js"></script>';
 }
 
-function antispam_check_is_spam($data)
+function apbct_sdk_check_is_spam($data)
 {
     global $cleantalk_executed;
 
-    $key = antispam_key();
+    $key = apbct_sdk_key();
     if ($cleantalk_executed || defined('APBCT_VERSION') || !$key) {
         return false;
     }
 
-    $params = antispam_gather_params($data);
+    $params = apbct_sdk_gather_params($data);
     $response = wp_remote_post('https://moderate.cleantalk.org/api2.0', array(
         'body' => json_encode($params),
     ));
@@ -181,7 +156,7 @@ function antispam_check_is_spam($data)
     return false;
 }
 
-function antispam_gather_params($data)
+function apbct_sdk_gather_params($data)
 {
     $email_pattern = '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/';
     $email = null;
@@ -202,8 +177,8 @@ function antispam_gather_params($data)
         'sender_ip' => $_SERVER['REMOTE_ADDR'],
         'x_forwarded_for' => isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null,
         'x_real_ip' => isset($_SERVER['HTTP_X_REAL_IP']) ? $_SERVER['HTTP_X_REAL_IP'] : null,
-        'auth_key' => antispam_key(),
-        'agent' => 'antispam-3rd-party-0.1.0',
+        'auth_key' => apbct_sdk_key(),
+        'agent' => APBCT_SDK_NAME . '_' . APBCT_SDK_VERSION,
         'sender_email' => $email,
         'event_token' => $data['ct_bot_detector_event_token'],
         'all_headers' => !empty($all_headers) ? json_encode($all_headers) : '',
