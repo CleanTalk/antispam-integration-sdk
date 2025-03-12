@@ -25,6 +25,8 @@ function apbct_sdk_sync()
     }
 
     if (empty($key)) {
+        update_option('apbct_sdk_key', '');
+        $result['success'] = true;
         $result['message'] = 'key is empty';
         wp_send_json($result);
     }
@@ -76,22 +78,30 @@ function apbct_sdk_sync()
 function apbct_sdk_render_key_form()
 {
     $key = apbct_sdk_key();
-    $agitation = '<span>Antispam is inactive, please enter your key to avoid spam from your life. <a href="https://cleantalk.org/" target="_blank">Get your key</a></span>';
-    $message = $key ? 'Antispam is active.' : $agitation;
+    $agitation = 'CleanTalk is cloud Anti-Spam service which focuses on a background scoring for websites visitors to highlight legitimate visitors and filter spambots.<br>Click here to get your key and start filter spam bots! <a href="https://cleantalk.org/register" target="_blank">https://cleantalk.org/register</a>';
+    $agitation = wp_kses($agitation, array('a' => array('href' => array(), 'target' => array()), 'br' => array()));
+    $key_is_ok_desc = 'Anti-Spam is active, use <a href="https://cleantalk.org/my" target="_blank">Dashboard</a> to tune the service.';
+    $key_is_ok_desc = wp_kses($key_is_ok_desc, array('a' => array('href' => array(), 'target' => array())));
 
-    return '<p><form id="apbct_sdk-key-form" method="post">'
-    . $message . '<br><input type="text" name="apbct_sdk_key" value="' . $key . '"> <input type="submit" value="Save">'
-    . wp_nonce_field('apbct_sdk_key_form', 'apbct_sdk_key_form_nonce') . '<input type="hidden" name="action" value="apbct_sdk_key_form">'
-    . '</form></p>'
-    . '<script> jQuery(document).ready(function($) {
+    $message = $key ? $key_is_ok_desc : $agitation;
+
+    return '<p><span class="apbct_sdk_description">' . $message . '</span>
+    . <form id="apbct_sdk-key-form" method="post">'
+        . '<input type="text" name="apbct_sdk_key" value="' . $key . '" placeholder="API key"> <input type="submit" value="Save" class="apbct_sdk_submit">'
+        . wp_nonce_field('apbct_sdk_key_form', 'apbct_sdk_key_form_nonce') . '<input type="hidden" name="action" value="apbct_sdk_key_form">'
+        . '</form></p>'
+        . '<script> jQuery(document).ready(function($) {
         $("form#apbct_sdk-key-form").submit(function(e) {
             e.preventDefault();
+            $(".apbct_sdk_submit").attr("disabled","disabled").css("cursor", "wait");
             $.post("' . admin_url('admin-ajax.php') . '", $(this).serialize(), function(response) {
                 $(".apbct_sdk-error").remove();
-
+                $(".apbct_sdk_submit").removeAttr("disabled").removeAttr("style");
                 if (response.success) {
-                    $("input[name=\'apbct_sdk_key\']").parent().find("span").html("Antispam is active.");
+                    const message = response.message === "key is empty" ? "' . addslashes($agitation) . '" : "' . addslashes($key_is_ok_desc) . '";
+                    $("input[name=\'apbct_sdk_description\']").html(message);
                 } else {
+                    $("input[name=\'apbct_sdk_description\']").html("' . addslashes($agitation) . '");
                     $("input[name=\'apbct_sdk_key\']").parent().after("<div class=\'error apbct_sdk-error\'>" + response.message + "</div>");
                 }
             });
