@@ -1,30 +1,32 @@
 <?php
 
-defined( 'ABSPATH' ) || exit;
+defined('ABSPATH') || exit;
 
 define('APBCT_SDK_NAME', 'apbct_sdk');
 define('APBCT_SDK_VERSION', '0.1.0');
 
 add_action('wp_ajax_apbct_sdk_key_form', 'apbct_sdk_sync');
 
-if (apbct_sdk_key() && !defined('APBCT_VERSION')) {
+if ( apbct_sdk_key() && !defined('APBCT_VERSION') ) {
     add_action('wp_head', 'apbct_sdk_render_bot_detector');
 }
 
 function apbct_sdk_sync()
 {
-    $key = sanitize_text_field($_POST['apbct_sdk_key']);
+    $key = isset($_POST['apbct_sdk_key']) && is_string($_POST['apbct_sdk_key'])
+        ? sanitize_text_field($_POST['apbct_sdk_key'])
+        : '';
     $result = [
         'success' => false,
         'message' => '',
     ];
 
-    if (!wp_verify_nonce($_POST['apbct_sdk_key_form_nonce'], 'apbct_sdk_key_form')) {
+    if ( isset($_POST['apbct_sdk_key_form_nonce']) && is_string($_POST['apbct_sdk_key_form_nonce']) && ! wp_verify_nonce($_POST['apbct_sdk_key_form_nonce'], 'apbct_sdk_key_form') ) {
         $result['message'] = 'nonce is not valid';
         wp_send_json($result);
     }
 
-    if (empty($key)) {
+    if ( empty($key) ) {
         update_option('apbct_sdk_key', '');
         $result['success'] = true;
         $result['message'] = 'key is empty';
@@ -38,21 +40,23 @@ function apbct_sdk_sync()
         ),
     ));
 
-    if ( is_wp_error( $response ) || ! $response ) {
-        $result['message'] = wp_remote_retrieve_response_message( $response );
+    if ( is_wp_error($response) || !$response ) {
+        $result['message'] = wp_remote_retrieve_response_message($response);
         return $result;
     }
 
-    $body = wp_remote_retrieve_body( $response );
-    if (empty($body)) {
+    $body = wp_remote_retrieve_body($response);
+    if ( empty($body) ) {
         $result['message'] = 'not found content';
         wp_send_json($result);
     }
 
-    $response_code = wp_remote_retrieve_response_code( $response );
-    if ($response_code >= 400) {
+    $response_code = wp_remote_retrieve_response_code($response);
+    if ( $response_code >= 400 ) {
         $msg = '';
-        if (isset( $response->detail)) {
+        if ( $response instanceof \WP_Error ) {
+            $msg = $response->get_error_message();
+        } elseif ( is_object($response) && isset($response->detail) ) {
             $msg = $response->detail;
         }
         $result['message'] = 'response code error: ' . $response_code . ' - ' . $msg;
@@ -60,12 +64,12 @@ function apbct_sdk_sync()
     }
 
     $response = json_decode($body);
-    if (is_null($response)) {
+    if ( is_null($response) ) {
         $result['message'] = 'decoded response null';
         wp_send_json($result);
     }
 
-    if (isset($response->data->valid) && $response->data->valid == 0) {
+    if ( isset($response->data->valid) && $response->data->valid == 0 ) {
         $result['message'] = 'key is not valid';
         wp_send_json($result);
     }
@@ -88,7 +92,10 @@ function apbct_sdk_render_key_form()
     return '<p><span class="apbct_sdk_description">' . $message . '</span>
     . <form id="apbct_sdk-key-form" method="post">'
         . '<input type="text" name="apbct_sdk_key" value="' . $key . '" placeholder="API key"> <input type="submit" value="Save" class="apbct_sdk_submit">'
-        . wp_nonce_field('apbct_sdk_key_form', 'apbct_sdk_key_form_nonce') . '<input type="hidden" name="action" value="apbct_sdk_key_form">'
+        . wp_nonce_field(
+            'apbct_sdk_key_form',
+            'apbct_sdk_key_form_nonce'
+        ) . '<input type="hidden" name="action" value="apbct_sdk_key_form">'
         . '</form></p>'
         . '<script> jQuery(document).ready(function($) {
         $("form#apbct_sdk-key-form").submit(function(e) {
@@ -113,7 +120,7 @@ function apbct_sdk_render_key_form()
 function apbct_sdk_key()
 {
     $key = get_option('apbct_sdk_key', '');
-    if (is_string($key)) {
+    if ( is_string($key) ) {
         return $key;
     }
     return '';
@@ -129,7 +136,7 @@ function apbct_sdk_check_is_spam($data)
     global $cleantalk_executed;
 
     $key = apbct_sdk_key();
-    if ($cleantalk_executed || defined('APBCT_VERSION') || !$key) {
+    if ( $cleantalk_executed || defined('APBCT_VERSION') || !$key ) {
         return false;
     }
 
@@ -138,26 +145,26 @@ function apbct_sdk_check_is_spam($data)
         'body' => json_encode($params),
     ));
 
-    if (is_wp_error($response)) {
+    if ( is_wp_error($response) ) {
         return false;
     }
 
     $body = wp_remote_retrieve_body($response);
-    if (empty($body)) {
+    if ( empty($body) ) {
         return false;
     }
 
     $response_code = wp_remote_retrieve_response_code($response);
-    if ($response_code >= 400) {
+    if ( $response_code >= 400 ) {
         return false;
     }
 
     $response = json_decode($body);
-    if (is_null($response)) {
+    if ( is_null($response) ) {
         return false;
     }
 
-    if (isset($response->allow) && $response->allow == 0) {
+    if ( isset($response->allow) && $response->allow == 0 ) {
         return $response->comment;
     }
 
@@ -171,20 +178,23 @@ function apbct_sdk_gather_params($data)
     $email_pattern = '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/';
     $email = null;
 
-    array_walk_recursive($data, function($value) use (&$email, $email_pattern) {
-        if (is_string($value) && preg_match($email_pattern, $value, $matches)) {
+    array_walk_recursive($data, function ($value) use (&$email, $email_pattern) {
+        if ( is_string($value) && preg_match($email_pattern, $value, $matches) ) {
             $email = $matches[0];
         }
     });
 
-    if (function_exists('apache_request_headers')) {
-        $all_headers = array_filter(apache_request_headers(), function($value, $key) {
+    if ( function_exists('apache_request_headers') ) {
+        $all_headers = array_filter(apache_request_headers(), function ($value, $key) {
             return strtolower($key) !== 'cookie';
         }, ARRAY_FILTER_USE_BOTH);
     }
 
+    /** @psalm-suppress PossiblyUndefinedArrayOffset */
+    $sender_ip = $_SERVER['REMOTE_ADDR'];
+
     return [
-        'sender_ip' => $_SERVER['REMOTE_ADDR'],
+        'sender_ip' => $sender_ip,
         'x_forwarded_for' => isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null,
         'x_real_ip' => isset($_SERVER['HTTP_X_REAL_IP']) ? $_SERVER['HTTP_X_REAL_IP'] : null,
         'auth_key' => apbct_sdk_key(),
