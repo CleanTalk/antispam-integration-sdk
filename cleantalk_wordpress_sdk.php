@@ -65,16 +65,19 @@ class CleanTalkSDK
     /**
      * Constructor
      *
+     * @param string $vendor_agent_prefix CleanTalk API access key
+     * @param string $vendor_version CleanTalk API access key
      * @param string|null $access_key CleanTalk API access key
      * @param bool $load_scripts Whether to load public scripts
      */
-    public function __construct($vendor_agent_prefix, $access_key = null, $load_scripts = true)
+    public function __construct($vendor_agent_prefix, $vendor_version, $access_key = null, $load_scripts = true)
     {
         add_action('wp_ajax_apbct_sdk_key_form', array($this, 'sync'));
         $load_scripts && $this->wpLoadPublicScripts();
         $this->cleantalk_response = new CleantalkResponseSDK();
-        $vendor_agent_prefix      = is_string($vendor_agent_prefix) ? $vendor_agent_prefix : 'unknown_vendor';
-        $this->vendor_agent       = $vendor_agent_prefix . '_sdk';
+        $vendor_agent_prefix      = !empty($vendor_agent_prefix) && is_string($vendor_agent_prefix) ? $vendor_agent_prefix : 'unknown_vendor';
+        $vendor_agent_version      = !empty($vendor_version) && is_string($vendor_version) ? $vendor_version : '1.0.0';
+        $this->vendor_agent       = 'wordpress-' . $vendor_agent_prefix . '-' . $vendor_agent_version;
         $this->setAccessKey($access_key, ! empty($access_key));
     }
 
@@ -109,7 +112,7 @@ class CleanTalkSDK
      * @param bool $direct_call Whether this is a direct call (not AJAX)
      * @param bool $save_key_to_storage Do save key
      *
-     * @return array|void Returns array if direct_call, otherwise sends JSON response
+     * @return array|null Returns array if direct_call, otherwise sends JSON response
      */
     public function sync($input_key = null, $direct_call = false, $save_key_to_storage = true)
     {
@@ -178,6 +181,14 @@ class CleanTalkSDK
             if ( isset($response->data->valid) && $response->data->valid == 0 ) {
                 throw new \Exception('key is not valid');
             }
+
+            if ( isset($response->data->product_id) && $response->data->product_id != 1 ) {
+                throw new \Exception('key is not for Anti-Spam service');
+            }
+
+            if ( isset($response->data->moderate) && $response->data->moderate == 0 ) {
+                throw new \Exception('service disabled, check key license');
+            }
         } catch (\Exception $e) {
             $result['message'] = $e->getMessage();
 
@@ -210,17 +221,18 @@ class CleanTalkSDK
     /**
      * Render the API key form HTML
      *
+     * @param string|null $vendor_name
      * @return string HTML for the key form
      */
-    protected function renderKeyForm()
+    protected function renderKeyForm($vendor_name = null)
     {
         $key            = (string)static::storageGetAccessKey();
-        $agitation      = 'CleanTalk is cloud Anti-Spam service which focuses on a background scoring for websites visitors to highlight legitimate visitors and filter spambots.<br>Click here to get your key and start filter spam bots! <a href="https://cleantalk.org/register" target="_blank">https://cleantalk.org/register</a>';
+        $agitation      = 'CleanTalk is cloud Anti-Spam service which focuses on a background scoring for websites visitors to highlight legitimate visitors and filter spambots.<br>Click here to get your key and start filter spam bots! <a href="' . static::getCleanTalkUTMLink($vendor_name, 'register') . '" target="_blank">https://cleantalk.org/register</a>';
         $agitation      = wp_kses(
             $agitation,
             array('a' => array('href' => array(), 'target' => array()), 'br' => array())
         );
-        $key_is_ok_desc = 'Anti-Spam is active, use <a href="https://cleantalk.org/my" target="_blank">Dashboard</a> to tune the service.';
+        $key_is_ok_desc = 'Anti-Spam is active, use <a href="' . static::getCleanTalkUTMLink($vendor_name, 'my') . '" target="_blank">Dashboard</a> to tune the service.';
         $key_is_ok_desc = wp_kses($key_is_ok_desc, array('a' => array('href' => array(), 'target' => array())));
 
         $message = $key ? $key_is_ok_desc : $agitation;
@@ -270,7 +282,7 @@ class CleanTalkSDK
     {
         return sprintf(
             '<script src="%s" id="ct_bot_detector-js"></script>',
-            static::getBotDetectorScriptURL()
+            esc_attr(static::getBotDetectorScriptURL())
         );
     }
 
@@ -303,15 +315,17 @@ class CleanTalkSDK
     }
 
     /**
-     * Check if data contains spam
+     * Check if data contains spam. A simple way to get if spam or not.
+     * Use if you need bool value as result, a do not need anything else.
+     * Remember, if anything goes wrong with submission, the result become false.
      *
-     * @param array $data_container Data to check
+     * @param CleantalkMessageSDK $cleantalk_sdk_message Data to check
      *
      * @return bool True if spam detected, false otherwise
      */
-    public function isSpam($data_container)
+    public function isSpam($cleantalk_sdk_message)
     {
-        $response = $this->getCleanTalkResponse($data_container);
+        $response = $this->getCleanTalkResponse($cleantalk_sdk_message);
         if ( isset($response->allow) && $response->allow == 0 ) {
             return true;
         }
@@ -322,18 +336,23 @@ class CleanTalkSDK
     /**
      * Get response from CleanTalk servers for data check
      *
-     * @param array $data_container Data to check
-     * @param CleantalkMessageSDK|null $custom_ct_message Data to check
+     * @param CleantalkMessageSDK $cleantalk_sdk_message Data to check
      *
      * @return CleantalkResponseSDK Response object
      */
-    public function getCleanTalkResponse($data_container, $custom_ct_message = null)
+    public function getCleanTalkResponse($cleantalk_sdk_message)
     {
         global $cleantalk_executed;
 
-        try {
-            $work_key = ! empty($this->access_key) ? $this->access_key : static::storageGetAccessKey();
+        if ( !empty($this->access_key) ) {
+            $work_key = $this->access_key;
+        } else if ( !empty($cleantalk_sdk_message->auth_key) ) {
+            $work_key = $cleantalk_sdk_message->auth_key;
+        } else {
+            $work_key = static::storageGetAccessKey();
+        }
 
+        try {
             if ( ! $work_key ) {
                 $this->cleantalk_response->skip_reason = 'no access key';
                 throw new \Exception('Request skipped');
@@ -351,23 +370,18 @@ class CleanTalkSDK
                 throw new \Exception('Request skipped');
             }
 
-            $params = $custom_ct_message && $custom_ct_message instanceof CleantalkMessageSDK
-                ? $custom_ct_message
-                : $this->gatherMessage($data_container, $work_key);
-
-
-            if ( empty($params) ) {
+            if ( empty($cleantalk_sdk_message) ) {
                 $this->cleantalk_response->skip_reason = 'empty message';
                 throw new \Exception('Bad params');
             }
 
-            if ( empty($params->event_token) ) {
+            if ( empty($cleantalk_sdk_message->event_token) ) {
                 $this->cleantalk_response->skip_reason = 'event token is empty';
                 throw new \Exception('Bad params');
             }
 
             $response = wp_remote_post('https://moderate.cleantalk.org/api2.0', array(
-                'body' => $params->getJson(),
+                'body' => $cleantalk_sdk_message->getJson(),
             ));
 
             if ( is_wp_error($response) ) {
@@ -412,14 +426,14 @@ class CleanTalkSDK
     }
 
     /**
-     * Gather parameters for CleanTalk API request
+     * Gather default parameters for CleanTalk API request
      *
      * @param array $data Input data
      * @param string|null $work_key Optional API key
      *
      * @return CleantalkMessageSDK Parameters for API request in JSON format
      */
-    public function gatherMessage($data, $work_key)
+    public function getDefaultHTTPMessage($data, $work_key)
     {
         $email_pattern = '/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/';
         $email         = null;
@@ -521,6 +535,24 @@ class CleanTalkSDK
 
         return false;
     }
+
+    /**
+     * @param string|null $utm_vendor_name UTM campaign source should contain vendor name.
+     *
+     * @return string
+     */
+    public static function getCleanTalkUTMLink($utm_vendor_name, $get_path = '')
+    {
+        $utm = array(
+            'utm_campaign' => is_string($utm_vendor_name) ? $utm_vendor_name : 'unknown_sdk_vendor',
+            'utm_source' => 'admin_panel',
+            'utm_medium' => 'plugin',
+            'utm_content' => 'pluginsettings',
+        );
+        $utm = http_build_query($utm);
+        $href = 'https://cleantalk.org/' . $get_path . '/' . $utm;
+        return esc_url($href);
+    }
 }
 
 /**
@@ -587,16 +619,28 @@ class CleantalkMessageSDK
      * Sender info. Visitor message.
      * @var string
      */
-    public $sender_message = '';
+    public $message = '';
     /**
      * JSON encoded string of sender info, including referrer, user agent, and message.
      * @var string
      */
     private $sender_info = '';
     /**
+     * @var bool is the request is registration
+     */
+    public $registration_flag = false;
+    /**
      * @var string SDK version
      */
     private $sdk_version = '';
+    /**
+     * @var string misc service data
+     */
+    private $post_info = '';
+    /**
+     * @var string the API method for spam checking
+     */
+    private $method_name = 'check_message';
 
     /**
      * Constructor - initializes sender_info
@@ -610,17 +654,31 @@ class CleantalkMessageSDK
                 settype($this->$param_name, $type);
             }
         }
-        $this->prepareSenderInfo();
+        $this->prepareServiceData();
     }
 
-    public function prepareSenderInfo()
+    /**
+     * Service method. Prepare sender_info, post_info and method name.
+     * @return void
+     */
+    public function prepareServiceData()
     {
+        //prepare sender info
         $this->sender_info = json_encode(
             [
                 'REFFERRER'  => $this->referrer,
                 'user_agent' => $this->user_agent,
-                'message' => $this->sender_message,
                 'sdk_version' => $this->sdk_version,
+            ]
+        );
+        //prepare method name
+        $this->method_name = $this->registration_flag ? 'check_newuser' : 'check_message';
+
+        //prepare post info
+        $comment_type = $this->registration_flag ? 'sdk_registration' : 'sdk_contact_form';
+        $this->post_info = json_encode(
+            [
+                'comment_type' => $comment_type . '_' . $this->agent
             ]
         );
     }
@@ -632,10 +690,13 @@ class CleantalkMessageSDK
      */
     public function getArray()
     {
-        $this->prepareSenderInfo();
+        $this->prepareServiceData();
         return get_object_vars($this);
     }
 
+    /**
+     * @return string
+     */
     public function getJson()
     {
         $json = json_encode($this->getArray());
