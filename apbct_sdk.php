@@ -193,7 +193,7 @@ function apbct_sdk_gather_params($data)
     /** @psalm-suppress PossiblyUndefinedArrayOffset */
     $sender_ip = $_SERVER['REMOTE_ADDR'];
 
-    return [
+    $request_params =  [
         'sender_ip' => $sender_ip,
         'x_forwarded_for' => isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null,
         'x_real_ip' => isset($_SERVER['HTTP_X_REAL_IP']) ? $_SERVER['HTTP_X_REAL_IP'] : null,
@@ -206,4 +206,10 @@ function apbct_sdk_gather_params($data)
             'REFFERRER' => isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '',
         ]
     ];
+
+    if ( ! empty($data['event_token_enabled']) ) {
+        $request_params['event_token_enabled'] = $data['event_token_enabled'];
+    }
+
+    return $request_params;
 }
